@@ -31,4 +31,12 @@ void kernel zero(global float* out, const uint n) {
     for(uint i = 0; i < n; i++) out[i] = 0;
 }
 
+void kernel copy(global float* dest, global float* src, const uint n) {
+    const int id = get_global_id(0);
+    if(id >= n) return;
+
+    dest[id] = src[id];
+}
+
+
 

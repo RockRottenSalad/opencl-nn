@@ -6,7 +6,6 @@
 #include <CL/opencl.hpp>
 
 #include <algorithm>
-#include <numeric>
 
 using namespace lazyml;
 using namespace lazyml::models;
@@ -69,6 +68,7 @@ vnn::vnn(clwrapper::clcontext& con, std::vector<uint> &arch)
 
     _apply_gradient_kernel = _context.get_vnn_kernels().get().apply_gradient_kernel;
     _zero_kernel = _context.get_utils_kernels().get().zero;
+    _copy_kernel = _context.get_utils_kernels().get().copy;
 
 }
 
@@ -76,8 +76,12 @@ vnn::~vnn() {}
 
 
 math::matrix<VNN_FLOAT_TYPE> vnn::run(math::matrix<VNN_FLOAT_TYPE> input) {
+
+//    auto buff = cl::Buffer(_context._context, CL_MEM_READ_WRITE, sizeof(VNN_FLOAT_TYPE)*input.cols());
+    _context._queue.enqueueWriteBuffer(_activations_d[0][0], CL_FALSE, 0, sizeof(VNN_FLOAT_TYPE)*input.cols(), input.data().data());
+
     // Forward network
-    forward(input);
+    forward(_activations_d[0][0]);
 
     // Create output buffer
     math::matrix<VNN_FLOAT_TYPE> out = {1, _neurons_per_layer[_layers-1], true};
@@ -92,17 +96,44 @@ void vnn::train(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FLOAT_TYPE>
     assert(input.cols() == _neurons_per_layer[0] && output.cols() == _neurons_per_layer[_layers-1]);
     assert(input.rows() == output.rows());
 
-    zero_gradient();
-
     size_t n = input.rows();
-    for(size_t i = 0; i < n; i++) {
-        zero_gradient_activations();
+    size_t input_sz = input.cols();
+    size_t output_sz = output.cols();
 
-        forward(input.row(i));
-        backprop(output.row(i));
+    std::vector<cl::Buffer> input_buffers; input_buffers.reserve(n);
+    std::vector<cl::Buffer> output_buffers; output_buffers.reserve(n);
+
+    for(size_t i = 0; i < n; i++) {
+        input_buffers.emplace_back(_context._context, CL_MEM_READ_WRITE, sizeof(VNN_FLOAT_TYPE)*input_sz);
+        _context._queue
+            .enqueueWriteBuffer(
+                input_buffers[i],
+                CL_FALSE, 0,
+                sizeof(VNN_FLOAT_TYPE)*input_sz,
+                input.data().data() + (input_sz*i)
+            );
+
+        output_buffers.emplace_back(_context._context, CL_MEM_READ_WRITE, sizeof(VNN_FLOAT_TYPE)*output_sz);
+        _context._queue
+            .enqueueWriteBuffer(
+                output_buffers[i],
+                CL_FALSE, 0,
+                sizeof(VNN_FLOAT_TYPE)*output_sz,
+                output.data().data() + (output_sz*i)
+            );
     }
 
-    apply_gradient( static_cast<cl_uint>(n) );
+    for(uint epoch = 0; epoch < iterations; epoch++) {
+        zero_gradient();
+
+        for(size_t i = 0; i < n; i++) {
+            zero_gradient_activations();
+            forward(input_buffers[i]);
+            backprop(output_buffers[i]);
+        }
+
+        apply_gradient( static_cast<cl_uint>(n) );
+    }
 }
 
 VNN_FLOAT_TYPE vnn::cost(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FLOAT_TYPE> output) {
@@ -123,13 +154,25 @@ VNN_FLOAT_TYPE vnn::cost(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FL
     return err / static_cast<float>(n);
 }
 
+VNN_FLOAT_TYPE cost(std::vector<cl::Buffer> &input_buffers, std::vector<cl::Buffer> &output_buffers) {
+    assert(input_buffers.size() == output_buffers.size() && input_buffers.size() > 0);
+    size_t n = input_buffers.size();
 
-void vnn::forward(math::matrix<VNN_FLOAT_TYPE> input) {
-    assert(input.rows() == 1 && "Expected 1xM matrix where M is the number of input neurons");
-    assert(input.cols() == _neurons_per_layer[0]);
+    VNN_FLOAT_TYPE err = 0.0;
+    for(size_t i = 0; i < n; i++) {
+    }
 
-    // Copy input to input layer
-    _context._queue.enqueueWriteBuffer(_activations_d[0][0], CL_TRUE, 0, sizeof(VNN_FLOAT_TYPE)*input.cols(), input.data().data());
+    return err / static_cast<float>(n);
+}
+
+
+void vnn::forward(cl::Buffer &input) {
+
+    _copy_kernel.setArg(0, _activations_d[0][0]);
+    _copy_kernel.setArg(1, input);
+    _copy_kernel.setArg(2, sizeof(cl_uint), &_neurons_per_layer[0]);
+
+    _context._queue.enqueueNDRangeKernel(_copy_kernel, cl::NullRange, _kernel_range);
 
     for(size_t i = 0; i < _layers-1; i++) {
 
@@ -154,16 +197,13 @@ void vnn::forward(math::matrix<VNN_FLOAT_TYPE> input) {
 
 }
 
-void vnn::backprop(math::matrix<VNN_FLOAT_TYPE> output) {
-    assert(output.rows() == 1 && output.cols() == _neurons_per_layer[_layers-1]);
-    cl_uint n = static_cast<cl_uint>(output.cols());
+void vnn::backprop(cl::Buffer &output) {
+    cl_uint n = _neurons_per_layer[_layers-1];
+    _copy_kernel.setArg(0, _activations_d[1][_layers-1]);
+    _copy_kernel.setArg(1, output);
+    _copy_kernel.setArg(2, sizeof(cl_uint), &n);
 
-    // INIT
-
-    // Write output to last gradient activation layer in order to compute (aL - y)
-    _context._queue.enqueueWriteBuffer(
-        _activations_d[1][_layers-1], CL_TRUE, 0, sizeof(VNN_FLOAT_TYPE)*output.cols(), output.data().data()
-    );
+    _context._queue.enqueueNDRangeKernel(_copy_kernel, cl::NullRange, _kernel_range);
 
     // Compute (aL - y)
     _backprop_init_kernel.setArg(0, _activations_d[0][_layers-1]);

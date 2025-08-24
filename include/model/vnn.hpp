@@ -20,7 +20,6 @@ namespace models {
         void train(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FLOAT_TYPE> output, uint iterations);
         VNN_FLOAT_TYPE cost(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FLOAT_TYPE> output);
 
-
         private:
         std::vector<cl_uint> _neurons_per_layer;
         size_t _layers;
@@ -35,13 +34,14 @@ namespace models {
 
         cl::Kernel _cost_kernel;
         cl::Kernel _forward_kernel;
-        cl::Kernel _backprop_init_kernel, _backprop_step_kernel, _apply_gradient_kernel, _zero_kernel;
+        cl::Kernel _backprop_init_kernel, _backprop_step_kernel, _apply_gradient_kernel, _zero_kernel, _copy_kernel;
 
         cl::NDRange _kernel_range;
 
+        VNN_FLOAT_TYPE cost(std::vector<cl::Buffer> &input_buffers, std::vector<cl::Buffer> &output_buffers);
 
-        void forward(math::matrix<VNN_FLOAT_TYPE> input);
-        void backprop(math::matrix<VNN_FLOAT_TYPE> output);
+        void forward(cl::Buffer &input);
+        void backprop(cl::Buffer &output);
 
         void apply_gradient(cl_uint n);
         void zero_gradient_activations();

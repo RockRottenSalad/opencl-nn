@@ -23,7 +23,7 @@ namespace lazyml {
 
         struct utils_kernels {
             cl::Program program;
-            cl::Kernel rand, zero;
+            cl::Kernel rand, zero, copy;
         };
 
         class kernelloader {

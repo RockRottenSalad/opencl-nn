@@ -28,6 +28,7 @@ std::reference_wrapper<utils_kernels> kernelloader::get_utils_kernels(cl::Contex
 
         // ---
         new_kernels.zero = cl::Kernel(new_kernels.program, "zero");
+        new_kernels.copy = cl::Kernel(new_kernels.program, "copy");
         new_kernels.rand = cl::Kernel(new_kernels.program, "rand_buffer");
 
         _utils = new_kernels;
