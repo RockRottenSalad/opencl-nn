@@ -42,19 +42,19 @@ int main() {
 
     std::cout << "COST: " << nn.cost(in, output) << std::endl;
 
-    std::cout << "0 0 = " << (nn.run(in.row(0)))[{0,0}] << std::endl;
-    std::cout << "0 1 = " << (nn.run(in.row(1)))[{0,0}] << std::endl;
-    std::cout << "1 0 = " << (nn.run(in.row(2)))[{0,0}] << std::endl;
-    std::cout << "1 1 = " << (nn.run(in.row(3)))[{0,0}] << std::endl;
+    std::cout << "0 0 = " << (nn.run(in.row(0)))[0] << std::endl;
+    std::cout << "0 1 = " << (nn.run(in.row(1)))[0] << std::endl;
+    std::cout << "1 0 = " << (nn.run(in.row(2)))[0] << std::endl;
+    std::cout << "1 1 = " << (nn.run(in.row(3)))[0] << std::endl;
 
     nn.train(in, output, 5000);
 
     std::cout << "COST: " << nn.cost(in, output) << std::endl;
 
-    std::cout << "0 0 = " << (nn.run(in.row(0)))[{0,0}] << std::endl;
-    std::cout << "0 1 = " << (nn.run(in.row(1)))[{0,0}] << std::endl;
-    std::cout << "1 0 = " << (nn.run(in.row(2)))[{0,0}] << std::endl;
-    std::cout << "1 1 = " << (nn.run(in.row(3)))[{0,0}] << std::endl;
+    std::cout << "0 0 = " << (nn.run(in.row(0)))[0] << std::endl;
+    std::cout << "0 1 = " << (nn.run(in.row(1)))[0] << std::endl;
+    std::cout << "1 0 = " << (nn.run(in.row(2)))[0] << std::endl;
+    std::cout << "1 1 = " << (nn.run(in.row(3)))[0] << std::endl;
 
 
     // Create context 

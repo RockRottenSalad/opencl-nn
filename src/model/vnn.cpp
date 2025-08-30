@@ -75,23 +75,6 @@ vnn::vnn(clwrapper::clcontext& con, std::vector<uint> &arch)
 vnn::~vnn() {}
 
 
-math::matrix<VNN_FLOAT_TYPE> vnn::run(math::matrix<VNN_FLOAT_TYPE> input) {
-
-//    auto buff = cl::Buffer(_context._context, CL_MEM_READ_WRITE, sizeof(VNN_FLOAT_TYPE)*input.cols());
-    _context._queue.enqueueWriteBuffer(_activations_d[0][0], CL_FALSE, 0, sizeof(VNN_FLOAT_TYPE)*input.cols(), input.data().data());
-
-    // Forward network
-    forward(_activations_d[0][0]);
-
-    // Create output buffer
-    math::matrix<VNN_FLOAT_TYPE> out = {1, _neurons_per_layer[_layers-1], true};
-
-    // Read output from last activation layer
-    _context._queue.enqueueReadBuffer(_activations_d[0][_layers-1], CL_TRUE, 0, sizeof(VNN_FLOAT_TYPE)*out.cols(), out.data().data());
-
-    return out;
-}
-
 void vnn::train(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FLOAT_TYPE> output, uint iterations) {
     assert(input.cols() == _neurons_per_layer[0] && output.cols() == _neurons_per_layer[_layers-1]);
     assert(input.rows() == output.rows());
@@ -134,6 +117,8 @@ void vnn::train(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FLOAT_TYPE>
 
         apply_gradient( static_cast<cl_uint>(n) );
     }
+
+    _context._queue.finish();
 }
 
 VNN_FLOAT_TYPE vnn::cost(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FLOAT_TYPE> output) {
@@ -141,17 +126,19 @@ VNN_FLOAT_TYPE vnn::cost(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FL
     assert(input.rows() == output.rows());
 
     size_t n = input.rows();
+    std::vector<VNN_FLOAT_TYPE> out(output.cols());
     VNN_FLOAT_TYPE err = 0.0f;
 
     for(size_t i = 0; i < n; i++) {
-        math::matrix<VNN_FLOAT_TYPE> out = run(input.row(i));
-        math::matrix<VNN_FLOAT_TYPE> expected = output.row(i);
+        run(input.row(i), out);
+        utils::view<VNN_FLOAT_TYPE> expected = output.row(i);
 
-        out -= expected;
-        for(size_t j = 0; j < out.cols(); j++) err += out[{0, j}]*out[{0, j}];
+        size_t index = 0;
+        std::transform(ALL(out), out.begin(), [&index,&expected](VNN_FLOAT_TYPE x) {index++; return x - expected[index-1];} );
+        std::for_each(ALL(out), [&err](VNN_FLOAT_TYPE x) { err += x*x; });
     }
 
-    return err / static_cast<float>(n);
+    return err / static_cast<VNN_FLOAT_TYPE>(n);
 }
 
 VNN_FLOAT_TYPE cost(std::vector<cl::Buffer> &input_buffers, std::vector<cl::Buffer> &output_buffers) {
@@ -276,7 +263,6 @@ void vnn::zero_gradient() {
 
         _zero_kernel.setArg(0, _weights_d[1][l]);
         _zero_kernel.setArg(1, sizeof(cl_uint), &n);
-
         _context._queue.enqueueNDRangeKernel(_zero_kernel, cl::NullRange, _kernel_range);
 
         _zero_kernel.setArg(0, _biases_d[1][l]);
