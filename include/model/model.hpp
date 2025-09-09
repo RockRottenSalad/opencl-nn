@@ -1,7 +1,6 @@
 #pragma once
 
 #include "clwrapper.hpp"
-#include "math/math.hpp"
 
 namespace lazyml {
 
@@ -13,9 +12,19 @@ namespace models {
         clwrapper::clcontext& _context;
         public:
         model(clwrapper::clcontext& con) :_context(con) {}
-//        virtual math::matrix<T> run(math::matrix<T> input) = 0;
-//        virtual void train(math::matrix<T> input, math::matrix<T> output, uint iterations) = 0;
-//        virtual float cost(math::matrix<T> input, math::matrix<T> output) = 0;
+        virtual void run(clwrapper::memory<T>& input, std::vector<T> &output) = 0;
+        virtual std::vector<T> run(clwrapper::memory<T>& input) = 0;
+
+        virtual void train(
+                std::vector<clwrapper::memory<T>>& input,
+                std::vector<clwrapper::memory<T>>& output,
+                uint iterations
+            ) = 0;
+
+        virtual T cost(
+                std::vector<clwrapper::memory<T>>& input,
+                std::vector<clwrapper::memory<T>>& output
+            ) = 0;
     };
 
 }
