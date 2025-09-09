@@ -1,13 +1,10 @@
 
-#include <CL/opencl.hpp>
-
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
-#include<iostream>
+#include <iostream>
 
 #include "lazyml.hpp"
-
-//#include<unistd.h>
 
 using namespace lazyml;
 
@@ -15,44 +12,47 @@ int main() {
     const time_t s = time(0);
     srand((s % 2 == 0 ? s+1 : s)); 
 
-//    srand(69);
-
-    math::matrix in {4, 2, true};
-
-    in[{0,0}] = 0; in[{0,1}] = 0;
-    in[{1,0}] = 0; in[{1,1}] = 1;
-    in[{2,0}] = 1; in[{2,1}] = 0;
-    in[{3,0}] = 1; in[{3,1}] = 1;
-
-    math::matrix output { 4, 1 };
-
-    output[{0,0}] = 0;
-    output[{1,0}] = 1;
-    output[{2,0}] = 1;
-    output[{3,0}] = 0;
-
     cl::Device default_device = utils::value_or_panic(clwrapper::getBestDevice(), "Could not any find device");
-
     clwrapper::clcontext con = {default_device};
+
+    // Just need to make this less hideous
+    std::vector<clwrapper::memory<VNN_FLOAT_TYPE>> inputs; inputs.reserve(4);
+    inputs.emplace_back( clwrapper::memory<VNN_FLOAT_TYPE>(con, {0,0}) );
+    inputs.emplace_back( clwrapper::memory<VNN_FLOAT_TYPE>(con, {0,1}) );
+    inputs.emplace_back( clwrapper::memory<VNN_FLOAT_TYPE>(con, {1,0}) );
+    inputs.emplace_back( clwrapper::memory<VNN_FLOAT_TYPE>(con, {1,1}) );
+    std::for_each(ALL(inputs), [](auto &x) { x.writeToDevice(false);  });
+
+    std::vector<clwrapper::memory<VNN_FLOAT_TYPE>> outputs; outputs.reserve(4);
+
+    outputs.emplace_back( clwrapper::memory<VNN_FLOAT_TYPE>(con, {0}) );
+    outputs.emplace_back( clwrapper::memory<VNN_FLOAT_TYPE>(con, {1}) );
+    outputs.emplace_back( clwrapper::memory<VNN_FLOAT_TYPE>(con, {1}) );
+    outputs.emplace_back( clwrapper::memory<VNN_FLOAT_TYPE>(con, {0}) );
+    std::for_each(ALL(outputs), [](auto &x) { x.writeToDevice(false);  });
 
     std::vector<cl_uint> arch = {2, 2, 1};
     models::vnn nn {con, arch};
 
-    std::cout << "COST: " << nn.cost(in, output) << std::endl;
+    std::cout << "COST: " << nn.cost(inputs, outputs) << std::endl;
 
-    std::cout << "0 0 = " << (nn.run(in.row(0)))[0] << std::endl;
-    std::cout << "0 1 = " << (nn.run(in.row(1)))[0] << std::endl;
-    std::cout << "1 0 = " << (nn.run(in.row(2)))[0] << std::endl;
-    std::cout << "1 1 = " << (nn.run(in.row(3)))[0] << std::endl;
+//    for(const float x : in.row(0)) {
+//        std::cout << x << std::endl;
+//    }
 
-    nn.train(in, output, 10000);
+    std::cout << "0 0 = " << (nn.run(inputs[0]))[0] << std::endl;
+    std::cout << "0 1 = " << (nn.run(inputs[1]))[0] << std::endl;
+    std::cout << "1 0 = " << (nn.run(inputs[2]))[0] << std::endl;
+    std::cout << "1 1 = " << (nn.run(inputs[3]))[0] << std::endl;
 
-    std::cout << "COST: " << nn.cost(in, output) << std::endl;
-
-    std::cout << "0 0 = " << (nn.run(in.row(0)))[0] << std::endl;
-    std::cout << "0 1 = " << (nn.run(in.row(1)))[0] << std::endl;
-    std::cout << "1 0 = " << (nn.run(in.row(2)))[0] << std::endl;
-    std::cout << "1 1 = " << (nn.run(in.row(3)))[0] << std::endl;
+    nn.train(inputs, outputs, 10000);
+//
+    std::cout << "COST: " << nn.cost(inputs, outputs) << std::endl;
+//
+    std::cout << "0 0 = " << (nn.run(inputs[0]))[0] << std::endl;
+    std::cout << "0 1 = " << (nn.run(inputs[1]))[0] << std::endl;
+    std::cout << "1 0 = " << (nn.run(inputs[2]))[0] << std::endl;
+    std::cout << "1 1 = " << (nn.run(inputs[3]))[0] << std::endl;
 
 
     // Create context 

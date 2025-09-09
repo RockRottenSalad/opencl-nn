@@ -3,8 +3,19 @@
 #include<string>
 #include<optional>
 #include<iostream>
+#include<cassert>
 
 #define ALL(container) (container).begin(), (container).end()
+
+template <typename T>
+concept IsContainer = 
+    requires(T t) {
+        t.begin();
+        t.end();
+        t.data();
+        t[0];
+        t.size();
+    };
 
 namespace lazyml {
 
@@ -27,6 +38,22 @@ namespace utils {
         std::cout << msg << std::endl;
         exit(-1);
     }
+
+    template<typename T>
+    class view {
+        private:
+            const T *_data;
+            const size_t _size, _stride;
+        public:
+            view(T *data, size_t size, size_t stride) : _data(data), _size(size), _stride(stride) {}
+            view(T *data, size_t size) : _data(data), _size(size), _stride(1) {}
+
+            T operator[](size_t index) { assert(index < _size); return _data[index*_stride]; }
+            const T* begin() const { return _data; }
+            const T* end() const { return _data + _size; }
+            const T* data() const { return _data; }
+            size_t size() const { return _size; }
+    };
 
 }
 }

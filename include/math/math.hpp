@@ -6,6 +6,7 @@
 #include<stddef.h>
 #include<vector>
 #include<ostream>
+#include<span>
 
 #include "utils.hpp"
 
@@ -135,21 +136,17 @@ namespace math {
             }
         }
 
-        matrix<T> row(size_t r) {
+        utils::view<T> row(size_t r) {
             assert(r < _rows && "Requsted row number greater than matrix dimensions");
-            matrix<T> ret = {1, _cols};
-            for(size_t c = 0; c < _cols; c++)
-                ret[{0,c}] = (*this)[{r,c}];
-
-            return ret;
+            utils::view<T> out = {_data.data() + r*_cols, _cols};
+            return out;
         }
 
-        matrix<T> col(size_t c) {
+        utils::view<T> col(size_t c) {
             assert(c < _cols && "Requsted column number greater than matrix dimensions");
-            matrix<T> ret = {_rows, 1};
-            for(size_t r = 0; r < _rows; r++)
-                ret[{r,0}] = (*this)[{r,c}];
-            return ret;
+            utils::view<T> out = {_data.data() + c, _rows, _cols};
+
+            return out;
         }
 
     };

@@ -44,7 +44,7 @@ std::optional<cl::Device> clwrapper::getBestDevice(SearchBy searchBy) {
     // Holds all devices for current platform
     std::vector<cl::Device> all_devices;
 
-    std::optional<cl::Device> candidate = {};
+    std::optional<cl::Device> candidate = std::nullopt;
     for(const cl::Platform& platform : all_platforms) {
         platform.getDevices(CL_DEVICE_TYPE_ALL, &all_devices);
         if(all_devices.size() == 0) continue;

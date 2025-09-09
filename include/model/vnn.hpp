@@ -1,8 +1,11 @@
 #pragma once
 
+#include "clwrapper.hpp"
 #include "model.hpp"
 #include "math/math.hpp"
+#include "utils.hpp"
 #include <CL/opencl.hpp>
+#include <algorithm>
 
 #ifndef VNN_FLOAT_TYPE
 #define VNN_FLOAT_TYPE float
@@ -11,14 +14,28 @@
 namespace lazyml {
 
 namespace models {
+
+#define MAIN_CL_BUFFERS 0
+#define GRADIENT_CL_BUFFERS 1
+
     class vnn : model<VNN_FLOAT_TYPE> {
         public:
         vnn(clwrapper::clcontext& con, std::vector<uint> &arch);
         ~vnn();
 
-        math::matrix<VNN_FLOAT_TYPE> run(math::matrix<VNN_FLOAT_TYPE> input);
-        void train(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FLOAT_TYPE> output, uint iterations);
-        VNN_FLOAT_TYPE cost(math::matrix<VNN_FLOAT_TYPE> input, math::matrix<VNN_FLOAT_TYPE> output);
+
+        std::vector<VNN_FLOAT_TYPE> run(clwrapper::memory<VNN_FLOAT_TYPE>& input);
+        void run(clwrapper::memory<VNN_FLOAT_TYPE>& input, std::vector<VNN_FLOAT_TYPE> &output);
+
+        void train(
+                std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>& input,
+                std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>& output,
+                uint iterations
+        );
+        VNN_FLOAT_TYPE cost(
+                std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>& input,
+                std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>& output
+        );
 
         private:
         std::vector<cl_uint> _neurons_per_layer;
@@ -26,7 +43,7 @@ namespace models {
 
         // Index 0 = Actual weights, biases and activations(counting input, intermediate and output as activations)
         // Index 1 = Gradient. Activations gradient is used as buffers for some certain calculations in backpropagation
-        std::array<std::vector<cl::Buffer>, 2> _weights_d, _biases_d, _activations_d;
+        std::array<std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>, 2> _weights_d, _biases_d, _activations_d;
 
         // Maybe use singleton pattern for this and only instantiate if get function is called?
         // Multiple instances of vnn can rely on same program. There might be delay though 
@@ -38,8 +55,6 @@ namespace models {
 
         cl::NDRange _kernel_range;
 
-        VNN_FLOAT_TYPE cost(std::vector<cl::Buffer> &input_buffers, std::vector<cl::Buffer> &output_buffers);
-
         void forward(cl::Buffer &input);
         void backprop(cl::Buffer &output);
 
@@ -47,7 +62,7 @@ namespace models {
         void zero_gradient_activations();
         void zero_gradient();
 
-        void add_matrix(std::vector<cl::Buffer> &matrix_list, math::matrix<VNN_FLOAT_TYPE> mat);
+        void add_matrix(std::vector<clwrapper::memory<VNN_FLOAT_TYPE>> &matrix_list, size_t n);
     };
 
 }
