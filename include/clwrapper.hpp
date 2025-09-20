@@ -42,6 +42,7 @@ namespace clwrapper {
             kernels::kernelloader _kernels;
     };
     
+    // TODO clean this up
     template<typename T>
     class memory {
         public:
@@ -50,6 +51,15 @@ namespace clwrapper {
             _host(initial_values),
             _device(cl::Buffer(_context._context, CL_MEM_READ_WRITE, sizeof(T)*initial_values.size()))
             {}
+
+            memory(clcontext &context, std::span<T> initial_values) : 
+            _context(context),
+            _device(cl::Buffer(_context._context, CL_MEM_READ_WRITE, sizeof(T)*initial_values.size()))
+            {
+                size_t n = initial_values.size();
+                _host = std::vector<T>(n, 0);
+                for(size_t i = 0; i < n; i++) _host[i] = initial_values[i];
+            }
 
             memory(clcontext &context, bool random, size_t n) : 
             _context(context)

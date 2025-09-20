@@ -79,7 +79,6 @@ vnn::vnn(clwrapper::clcontext& con, std::vector<uint> &arch)
     _apply_gradient_kernel = _context.get_vnn_kernels().get().apply_gradient_kernel;
     _zero_kernel = _context.get_utils_kernels().get().zero;
     _copy_kernel = _context.get_utils_kernels().get().copy;
-
 }
 
 vnn::~vnn() {}
@@ -125,7 +124,7 @@ void vnn::train(
     }
 
 
-    for(uint epoch = 0; epoch < iterations; epoch++) {
+    for(uint epoch = 1; epoch <= iterations; epoch++) {
         zero_gradient();
 
         for(size_t i = 0; i < n; i++) {
