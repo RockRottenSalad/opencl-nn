@@ -27,7 +27,8 @@ namespace utils {
     // Used to find ideal work group size for kernels
     uint nearest_power_of_two(uint x);
 
-    std::string file_to_string(std::string filepath);
+    std::string file_to_string(const std::string &filepath);
+    bool file_exists(const std::string &filepath);
 
     template<typename T>
     T value_or_panic(const std::optional<T>& opt, const std::string& msg) {

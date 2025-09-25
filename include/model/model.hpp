@@ -18,13 +18,18 @@ namespace models {
         virtual void train(
                 std::vector<clwrapper::memory<T>>& input,
                 std::vector<clwrapper::memory<T>>& output,
-                uint iterations
+                uint iterations,
+                T learning_rate
             ) = 0;
 
         virtual T cost(
                 std::vector<clwrapper::memory<T>>& input,
                 std::vector<clwrapper::memory<T>>& output
             ) = 0;
+
+        virtual void serialize(
+                const std::string &filename
+        ) = 0;
     };
 
 }

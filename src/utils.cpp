@@ -13,7 +13,7 @@ uint utils::nearest_power_of_two(uint x) {
     return y;
 }
 
-std::string utils::file_to_string(std::string filepath) {
+std::string utils::file_to_string(const std::string &filepath) {
     std::ifstream ifs(filepath.c_str(), std::ios::in | std::ios::binary | std::ios::ate);
 
     std::ifstream::pos_type fileSize = ifs.tellg();
@@ -29,3 +29,7 @@ std::string utils::file_to_string(std::string filepath) {
 }
 
 
+bool utils::file_exists(const std::string &filepath) {
+    std::ifstream fi(filepath);
+    return fi.good();
+}

@@ -84,15 +84,16 @@ void kernel apply_gradient(
     global float* gB,
     const uint cols,
     const uint rows,
-    const uint n
+    const uint n,
+    const float learning_rate
 ) {
     const int id = get_global_id(0);
     if(id >= cols) return;
 
     const float nf = (float)n;
 
-    B[id] -= gB[id] / nf;
-    for(int i = 0; i < rows; i++) W[i*cols + id] -= gW[i*cols + id] / nf;
+    B[id] -= learning_rate*(gB[id] / nf);
+    for(int i = 0; i < rows; i++) W[i*cols + id] -= learning_rate*(gW[i*cols + id] / nf);
 
 }
 

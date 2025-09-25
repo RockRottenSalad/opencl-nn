@@ -6,6 +6,7 @@
 #include <CL/opencl.hpp>
 
 #include <algorithm>
+#include <fstream>
 
 using namespace lazyml;
 using namespace lazyml::models;
@@ -67,7 +68,7 @@ vnn::vnn(clwrapper::clcontext& con, std::vector<uint> &arch)
 
     // Set the NDRange of the kernel to the width of the widest matrix
     // This is to ensure that there are enough threads to compute each matrix in parallel
-    uint max_column = *std::max_element(ALL(arch));
+    uint max_column = *std::max_element(arch.begin() + 1, arch.end());
     _kernel_range = cl::NDRange(max_column);
 
     _cost_kernel = _context.get_vnn_kernels().get().cost_kernel;
@@ -110,7 +111,8 @@ std::vector<VNN_FLOAT_TYPE> vnn::run(clwrapper::memory<VNN_FLOAT_TYPE>& input) {
 void vnn::train(
     std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>& input,
     std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>& output,
-    uint iterations
+    uint iterations,
+    VNN_FLOAT_TYPE learning_rate
 ) {
     assert(input.size() == output.size());
 
@@ -133,7 +135,7 @@ void vnn::train(
             backprop(output[i].get());
         }
 
-        apply_gradient( static_cast<cl_uint>(n) );
+        apply_gradient( static_cast<cl_uint>(n), static_cast<cl_float>(learning_rate) );
     }
 
     _context._queue.finish();
@@ -242,7 +244,7 @@ void vnn::backprop(cl::Buffer &output) {
     }
 }
 
-void vnn::apply_gradient(cl_uint n) {
+void vnn::apply_gradient(cl_uint n, VNN_FLOAT_TYPE learning_rate) {
 
     _apply_gradient_kernel.setArg(6, sizeof(cl_uint), &n);
 
@@ -258,6 +260,7 @@ void vnn::apply_gradient(cl_uint n) {
 
         _apply_gradient_kernel.setArg(4, sizeof(cl_uint), &cols);
         _apply_gradient_kernel.setArg(5, sizeof(cl_uint), &rows);
+        _apply_gradient_kernel.setArg(7, sizeof(cl_float), &learning_rate);
 
         _context._queue.enqueueNDRangeKernel(_apply_gradient_kernel, cl::NullRange, _kernel_range);
     }
@@ -299,3 +302,38 @@ void vnn::add_matrix(std::vector<clwrapper::memory<VNN_FLOAT_TYPE>> &matrix_list
     bool shouldBlock = false;
     matrix_list[index].writeToDevice(shouldBlock);
 }
+
+void vnn::read_from_device() {
+    std::for_each(ALL(_weights_d[MAIN_CL_BUFFERS]), [](clwrapper::memory<VNN_FLOAT_TYPE> &x) {
+        x.readFromDevice(false);
+    });
+
+    std::for_each(ALL(_biases_d[MAIN_CL_BUFFERS]), [](clwrapper::memory<VNN_FLOAT_TYPE> &x) {
+        x.readFromDevice(false);
+    });
+}
+
+void vnn::serialize(const std::string &filename) {
+    read_from_device();
+    _context._queue.finish();
+
+    std::ofstream out(filename, std::ios::binary | std::ios::out);
+
+    uint matrix_entry_size = sizeof(VNN_FLOAT_TYPE);
+    uint number_of_layers = static_cast<uint>(_neurons_per_layer.size());
+
+    out.write((char*)&matrix_entry_size, sizeof(uint));
+    out.write((char*)&number_of_layers, sizeof(uint));
+
+    for(uint i = 0; i < number_of_layers; i++) {
+        uint rows = static_cast<uint>(_neurons_per_layer[i]);
+        uint cols = static_cast<uint>(_neurons_per_layer[i+1]);
+        uint n = rows * cols;
+
+        out.write((char*)&_neurons_per_layer[i], sizeof(uint));
+
+    }
+
+
+}
+

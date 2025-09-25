@@ -30,12 +30,15 @@ namespace models {
         void train(
                 std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>& input,
                 std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>& output,
-                uint iterations
+                uint iterations,
+                VNN_FLOAT_TYPE learning_rate
         );
         VNN_FLOAT_TYPE cost(
                 std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>& input,
                 std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>& output
         );
+
+        void serialize(const std::string &filename);
 
         private:
         std::vector<cl_uint> _neurons_per_layer;
@@ -58,11 +61,13 @@ namespace models {
         void forward(cl::Buffer &input);
         void backprop(cl::Buffer &output);
 
-        void apply_gradient(cl_uint n);
+        void apply_gradient(cl_uint n, cl_float learning_rate);
         void zero_gradient_activations();
         void zero_gradient();
 
         void add_matrix(std::vector<clwrapper::memory<VNN_FLOAT_TYPE>> &matrix_list, size_t n);
+        void read_from_device();
+
     };
 
 }
