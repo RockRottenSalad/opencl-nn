@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <cstdint>
 
 using namespace lazyml;
 using namespace lazyml::models;
@@ -319,19 +320,29 @@ void vnn::serialize(const std::string &filename) {
 
     std::ofstream out(filename, std::ios::binary | std::ios::out);
 
-    uint matrix_entry_size = sizeof(VNN_FLOAT_TYPE);
-    uint number_of_layers = static_cast<uint>(_neurons_per_layer.size());
+    uint16_t matrix_entry_size = sizeof(VNN_FLOAT_TYPE);
+    uint16_t number_of_layers = static_cast<uint16_t>(_layers);
 
-    out.write((char*)&matrix_entry_size, sizeof(uint));
-    out.write((char*)&number_of_layers, sizeof(uint));
+    out.write((char*)&matrix_entry_size, sizeof(uint16_t));
+    out.write((char*)&number_of_layers, sizeof(uint16_t));
 
     for(uint i = 0; i < number_of_layers; i++) {
-        uint rows = static_cast<uint>(_neurons_per_layer[i]);
-        uint cols = static_cast<uint>(_neurons_per_layer[i+1]);
-        uint n = rows * cols;
+        uint32_t neurons = static_cast<uint32_t>(_neurons_per_layer[i]);
+        out.write((char*)&neurons, sizeof(uint32_t));
+    }
 
-        out.write((char*)&_neurons_per_layer[i], sizeof(uint));
+    char *ptr;
+    size_t len;
+    for(uint i = 0; i < number_of_layers; i++) {
+        ptr = (char*)_weights_d[MAIN_CL_BUFFERS][i].host_data();
+        len = _weights_d[MAIN_CL_BUFFERS][i].size();
 
+        out.write(ptr, sizeof(VNN_FLOAT_TYPE)*len);
+
+        ptr = (char*)_biases_d[MAIN_CL_BUFFERS][i].host_data();
+        len = _biases_d[MAIN_CL_BUFFERS][i].size();
+
+        out.write(ptr, sizeof(VNN_FLOAT_TYPE)*len);
     }
 
 
