@@ -72,7 +72,7 @@ namespace clwrapper {
                 _device = cl::Buffer(_context._context, CL_MEM_READ_WRITE, sizeof(T)*_host.size());
             }
 
-            void writeToDevice(bool blocking) { 
+            void write_to_device(bool blocking) { 
                 size_t zero_offset = 0;
                 _context._queue.enqueueWriteBuffer(
                     _device,
@@ -83,7 +83,7 @@ namespace clwrapper {
                 ); 
             }
 
-            void readFromDevice(bool blocking) { 
+            void read_from_device(bool blocking) { 
                 size_t zero_offset = 0;
                 _context._queue.enqueueReadBuffer(
                     _device,

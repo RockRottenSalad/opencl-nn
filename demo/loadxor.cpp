@@ -1,15 +1,29 @@
 
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
+#include <fstream>
 
 #include "lazyml.hpp"
 #include "xordata.hpp"
 
 using namespace lazyml;
 
+bool file_exists(const std::string &filename) {
+    std::ifstream in(filename, std::ios::in);
+
+    return in.is_open();
+}
+
 int main() {
     srand(time(nullptr)); 
+
+    const std::string file = "xor.nn";
+    if(!file_exists(file)) {
+        std::cout << "'xor.nn' not found, xor 'xor' target first to generate serialized model" << std::endl;
+        return 0;
+    }
 
     // Find best device(GPU)
     cl::Device default_device = utils::value_or_panic(clwrapper::getBestDevice(), "Could not any find device");
@@ -17,20 +31,11 @@ int main() {
     // Create context using previously found GPU
     clwrapper::clcontext con = {default_device};
 
-    // Load input and output data
-    // {0,0} => {0}
-    // {0,1} => {1}
-    // {1,0} => {1}
-    // {1,1} => {0}
+    // Load the serialized xor model
+    models::vnn nn {con, "xor.nn"};
+
     std::vector<clwrapper::memory<VNN_FLOAT_TYPE>> inputs = data_input(con);
     std::vector<clwrapper::memory<VNN_FLOAT_TYPE>> outputs = data_output(con);
-
-    // Neural network with:
-    // 2 input neurons.
-    // A hidden layer with 2 neurons
-    // A single output neuron.
-    std::vector<cl_uint> arch = {2, 2, 1};
-    models::vnn nn {con, arch};
 
     // Print out the current cost
     std::cout << "COST: " << nn.cost(inputs, outputs) << "\n";
@@ -41,19 +46,6 @@ int main() {
     std::cout << "1 0 = " << (nn.run(inputs[2]))[0] << "\n";
     std::cout << "1 1 = " << (nn.run(inputs[3]))[0] << "\n";
 
-    // Train the model for 750 iterations with learning rate = 15
-    nn.train(inputs, outputs, 750, 15.0);
-
-    // Print out the new cost after training
-    std::cout << "COST: " << nn.cost(inputs, outputs) << "\n";
-
-    // The output for each input after training
-    std::cout << "0 0 = " << (nn.run(inputs[0]))[0] << "\n";
-    std::cout << "0 1 = " << (nn.run(inputs[1]))[0] << "\n";
-    std::cout << "1 0 = " << (nn.run(inputs[2]))[0] << "\n";
-    std::cout << "1 1 = " << (nn.run(inputs[3]))[0] << std::endl;
-
-    // Save the model to a file called 'xor.nn'
-    nn.serialize("xor.nn");
+    return 0;
 }
 

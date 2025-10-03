@@ -30,14 +30,10 @@ vnn::vnn(clwrapper::clcontext& con, std::vector<uint> &arch)
     // n, since input is counted as a layer
     std::for_each(ALL(_activations_d), [n](auto &v){v.reserve(n);});
 
+    bool shouldRandomize = true;
+
     // Add input activation column vector
-    //this->add_matrix(_activations_d[MAIN_CL_BUFFERS], {1, arch[0]});
-    //this->add_matrix(_activations_d[GRADIENT_CL_BUFFERS], {1, arch[0]});
-    {
-        size_t number_of_input_neurons = arch[0];
-        this->add_matrix(_activations_d[MAIN_CL_BUFFERS], number_of_input_neurons);
-        this->add_matrix(_activations_d[GRADIENT_CL_BUFFERS], number_of_input_neurons);
-    }
+    this->add_matrix_pairs(_activations_d, shouldRandomize, _neurons_per_layer[0]);
 
     for(size_t i = 1; i < n; i++) {
         assert(arch[i] != 0 && "Neuron layer cannot have 0 neurons");
@@ -48,28 +44,70 @@ vnn::vnn(clwrapper::clcontext& con, std::vector<uint> &arch)
         size_t rows = arch[i-1];
         size_t cols = arch[i];
         size_t n = rows * cols;
-//        math::matrix w = {arch[i-1], arch[i]}; w.randomize();
-        this->add_matrix(_weights_d[MAIN_CL_BUFFERS], n);
-        this->add_matrix(_weights_d[GRADIENT_CL_BUFFERS], n);
+        this->add_matrix_pairs(_weights_d, n, shouldRandomize);
 
         // Add new bias and randomize the initial biases
         // Bias is a column vector with size corresponding to number of neurons in the current layer
-        //math::matrix b = {1, arch[i]}; b.randomize();
-        cols = arch[i];
-        this->add_matrix(_biases_d[MAIN_CL_BUFFERS], cols);
-        this->add_matrix(_biases_d[GRADIENT_CL_BUFFERS], cols);
+        this->add_matrix_pairs(_biases_d, cols, shouldRandomize);
 
         // Activation is a column vector
         // Same dimensions as bias
-//        math::matrix a = {1, arch[i]};
-        cols = arch[i];
-        this->add_matrix(_activations_d[MAIN_CL_BUFFERS], cols);
-        this->add_matrix(_activations_d[GRADIENT_CL_BUFFERS], cols);
+        this->add_matrix_pairs(_activations_d, cols, shouldRandomize);
     }
+
+    this->init();
+    this->write_to_device();
+}
+
+vnn::vnn(clwrapper::clcontext& con, const std::string &filename) : model(con) {
+    _context._queue.finish();
+
+    std::ifstream in(filename, std::ios::binary | std::ios::in);
+
+    uint16_t matrix_entry_size;
+    in.read(BYTE_PTR(matrix_entry_size), sizeof(uint16_t));
+
+    assert(matrix_entry_size == sizeof(VNN_FLOAT_TYPE));
+
+    uint16_t number_of_layers;
+    in.read(BYTE_PTR(number_of_layers), sizeof(uint16_t));
+    _layers = static_cast<size_t>(number_of_layers);
+
+    _neurons_per_layer.reserve(number_of_layers);
+    for(uint16_t i = 0; i < number_of_layers; i++) {
+        cl_uint output;
+        in.read(BYTE_PTR(output), sizeof(cl_uint));
+
+        _neurons_per_layer.emplace_back(output);
+    }
+
+    bool shouldRandomize = false;
+
+    this->add_matrix_pairs(_activations_d, _neurons_per_layer[0], shouldRandomize);
+
+    for(uint16_t i = 1; i < number_of_layers; i++) {
+        cl_uint rows = _neurons_per_layer[i-1];
+        cl_uint cols = _neurons_per_layer[i];
+        cl_uint n = rows * cols;
+
+        this->add_matrix_pairs(_weights_d, n, shouldRandomize);
+        this->add_matrix_pairs(_biases_d, cols, shouldRandomize);
+        this->add_matrix_pairs(_activations_d, cols, shouldRandomize);
+
+        in.read((char*)_weights_d[MAIN_CL_BUFFERS][i-1].host_data(), n * sizeof(VNN_FLOAT_TYPE));
+        in.read((char*)_biases_d[MAIN_CL_BUFFERS][i-1].host_data(), cols * sizeof(VNN_FLOAT_TYPE));
+
+    }
+
+    this->init();
+    this->write_to_device();
+}
+
+void vnn::init() {
 
     // Set the NDRange of the kernel to the width of the widest matrix
     // This is to ensure that there are enough threads to compute each matrix in parallel
-    uint max_column = *std::max_element(arch.begin() + 1, arch.end());
+    uint max_column = *std::max_element(_neurons_per_layer.begin() + 1, _neurons_per_layer.end());
     _kernel_range = cl::NDRange(max_column);
 
     _cost_kernel = _context.get_vnn_kernels().get().cost_kernel;
@@ -81,6 +119,7 @@ vnn::vnn(clwrapper::clcontext& con, std::vector<uint> &arch)
     _apply_gradient_kernel = _context.get_vnn_kernels().get().apply_gradient_kernel;
     _zero_kernel = _context.get_utils_kernels().get().zero;
     _copy_kernel = _context.get_utils_kernels().get().copy;
+
 }
 
 vnn::~vnn() {}
@@ -103,7 +142,7 @@ std::vector<VNN_FLOAT_TYPE> vnn::run(clwrapper::memory<VNN_FLOAT_TYPE>& input) {
     size_t output_sz =  static_cast<size_t>(_neurons_per_layer[_layers-1]) ;
     std::vector<VNN_FLOAT_TYPE> output(output_sz);
 
-    run(input, output);
+    this->run(input, output);
 
     return output;
 }
@@ -128,15 +167,15 @@ void vnn::train(
 
 
     for(uint epoch = 1; epoch <= iterations; epoch++) {
-        zero_gradient();
+        this->zero_gradient();
 
         for(size_t i = 0; i < n; i++) {
-            zero_gradient_activations();
-            forward(input[i].get());
-            backprop(output[i].get());
+            this->zero_gradient_activations();
+            this->forward(input[i].get());
+            this->backprop(output[i].get());
         }
 
-        apply_gradient( static_cast<cl_uint>(n), static_cast<cl_float>(learning_rate) );
+        this->apply_gradient( static_cast<cl_uint>(n), static_cast<cl_float>(learning_rate) );
     }
 
     _context._queue.finish();
@@ -163,7 +202,7 @@ VNN_FLOAT_TYPE vnn::cost(
     VNN_FLOAT_TYPE err = 0.0f;
 
     for(size_t i = 0; i < n; i++) {
-        run(input[i], out);
+        this->run(input[i], out);
 
         for(size_t j = 0; j < out.size(); j++) {
             VNN_FLOAT_TYPE tmp = out[j] - expected_output[i][j];
@@ -245,6 +284,8 @@ void vnn::backprop(cl::Buffer &output) {
     }
 }
 
+// Applies gradient stored in GRADIENT_CL_BUFFERS to MAIN_CL_BUFFERS with
+// given learning rate.
 void vnn::apply_gradient(cl_uint n, VNN_FLOAT_TYPE learning_rate) {
 
     _apply_gradient_kernel.setArg(6, sizeof(cl_uint), &n);
@@ -256,8 +297,8 @@ void vnn::apply_gradient(cl_uint n, VNN_FLOAT_TYPE learning_rate) {
         _apply_gradient_kernel.setArg(2, _biases_d[MAIN_CL_BUFFERS][l].get());
         _apply_gradient_kernel.setArg(3, _biases_d[GRADIENT_CL_BUFFERS][l].get());
 
-        cl_uint cols = _neurons_per_layer[l+1];
         cl_uint rows = _neurons_per_layer[l];
+        cl_uint cols = _neurons_per_layer[l+1];
 
         _apply_gradient_kernel.setArg(4, sizeof(cl_uint), &cols);
         _apply_gradient_kernel.setArg(5, sizeof(cl_uint), &rows);
@@ -293,24 +334,39 @@ void vnn::zero_gradient() {
     }
 }
 
+void vnn::add_matrix_pairs(
+    std::array<std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>, 2> &out,
+    cl_uint n, bool shouldRandomize) {
 
-void vnn::add_matrix(std::vector<clwrapper::memory<VNN_FLOAT_TYPE>> &matrix_list, size_t n) {
-    size_t index = matrix_list.size();
+    out[MAIN_CL_BUFFERS].emplace_back(
+        clwrapper::memory<VNN_FLOAT_TYPE>(_context, shouldRandomize, static_cast<size_t>(n))
+    );
 
-    bool shouldRandomizeValues = true;
-    matrix_list.emplace_back( clwrapper::memory<VNN_FLOAT_TYPE>(_context, shouldRandomizeValues, n)  );
+    out[GRADIENT_CL_BUFFERS].emplace_back(
+        clwrapper::memory<VNN_FLOAT_TYPE>(_context, shouldRandomize, static_cast<size_t>(n))
+    );
 
-    bool shouldBlock = false;
-    matrix_list[index].writeToDevice(shouldBlock);
 }
 
 void vnn::read_from_device() {
-    std::for_each(ALL(_weights_d[MAIN_CL_BUFFERS]), [](clwrapper::memory<VNN_FLOAT_TYPE> &x) {
-        x.readFromDevice(false);
+    bool shouldBlock = false;
+    std::for_each(ALL(_weights_d[MAIN_CL_BUFFERS]), [shouldBlock](clwrapper::memory<VNN_FLOAT_TYPE> &x) {
+        x.read_from_device(shouldBlock);
     });
 
-    std::for_each(ALL(_biases_d[MAIN_CL_BUFFERS]), [](clwrapper::memory<VNN_FLOAT_TYPE> &x) {
-        x.readFromDevice(false);
+    std::for_each(ALL(_biases_d[MAIN_CL_BUFFERS]), [shouldBlock](clwrapper::memory<VNN_FLOAT_TYPE> &x) {
+        x.read_from_device(shouldBlock);
+    });
+}
+
+void vnn::write_to_device() {
+    bool shouldBlock = false;
+    std::for_each(ALL(_weights_d[MAIN_CL_BUFFERS]), [shouldBlock](clwrapper::memory<VNN_FLOAT_TYPE> &x) {
+        x.write_to_device(shouldBlock);
+    });
+
+    std::for_each(ALL(_biases_d[MAIN_CL_BUFFERS]), [shouldBlock](clwrapper::memory<VNN_FLOAT_TYPE> &x) {
+        x.write_to_device(shouldBlock);
     });
 }
 
@@ -323,28 +379,25 @@ void vnn::serialize(const std::string &filename) {
     uint16_t matrix_entry_size = sizeof(VNN_FLOAT_TYPE);
     uint16_t number_of_layers = static_cast<uint16_t>(_layers);
 
-    out.write((char*)&matrix_entry_size, sizeof(uint16_t));
-    out.write((char*)&number_of_layers, sizeof(uint16_t));
+    out.write(BYTE_PTR(matrix_entry_size), sizeof(uint16_t));
+    out.write(BYTE_PTR(number_of_layers), sizeof(uint16_t));
 
     for(uint i = 0; i < number_of_layers; i++) {
-        uint32_t neurons = static_cast<uint32_t>(_neurons_per_layer[i]);
-        out.write((char*)&neurons, sizeof(uint32_t));
+        out.write(BYTE_PTR(_neurons_per_layer[i]), sizeof(cl_uint));
     }
 
     char *ptr;
     size_t len;
-    for(uint i = 0; i < number_of_layers; i++) {
-        ptr = (char*)_weights_d[MAIN_CL_BUFFERS][i].host_data();
+    for(uint16_t i = 0; i < number_of_layers-1; i++) {
+        ptr = (byte*)_weights_d[MAIN_CL_BUFFERS][i].host_data();
         len = _weights_d[MAIN_CL_BUFFERS][i].size();
 
         out.write(ptr, sizeof(VNN_FLOAT_TYPE)*len);
 
-        ptr = (char*)_biases_d[MAIN_CL_BUFFERS][i].host_data();
+        ptr = (byte*)_biases_d[MAIN_CL_BUFFERS][i].host_data();
         len = _biases_d[MAIN_CL_BUFFERS][i].size();
 
         out.write(ptr, sizeof(VNN_FLOAT_TYPE)*len);
     }
-
-
 }
 

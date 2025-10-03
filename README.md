@@ -9,7 +9,7 @@ seen in `demo/xor.cpp`.
 
 Dependencies are:
 - cmake
-- a C++ compiler with C++20 support
+- A C++ compiler with C++20 support
 - OpenCL library AND C++ header for OpenCL
 - OpenCL runtime for your GPU
 
@@ -19,7 +19,7 @@ randomized.
 
 ```
 mkdir build
-cd ./build
+cd build
 cmake ..
 cmake --build . -t runxor
 ```
@@ -41,4 +41,5 @@ be saved and so training can be paused/resumed at any time.
 
 Oh, and a cleaner way of setting up training data. Because the current solution
 is just hideous.
+
 

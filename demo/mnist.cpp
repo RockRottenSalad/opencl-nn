@@ -122,7 +122,7 @@ int main() {
     models::vnn nn {con, arch};
 
     std::cout << "COST: " << nn.cost(inputs, outputs) << std::endl;
-    nn.train(inputs, outputs, 10);
+    nn.train(inputs, outputs, 500, 20.0);
     std::cout << "COST: " << nn.cost(inputs, outputs) << std::endl;
 
 

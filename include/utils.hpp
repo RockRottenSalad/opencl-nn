@@ -7,6 +7,9 @@
 
 #define ALL(container) (container).begin(), (container).end()
 
+typedef char byte;
+#define BYTE_PTR(X) (byte*)&(X)
+
 template <typename T>
 concept IsContainer = 
     requires(T t) {

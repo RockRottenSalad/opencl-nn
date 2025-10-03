@@ -21,6 +21,7 @@ namespace models {
     class vnn : model<VNN_FLOAT_TYPE> {
         public:
         vnn(clwrapper::clcontext& con, std::vector<uint> &arch);
+        vnn(clwrapper::clcontext& con, const std::string &filename);
         ~vnn();
 
 
@@ -39,6 +40,7 @@ namespace models {
         );
 
         void serialize(const std::string &filename);
+        bool deserialize(const std::string &filename);
 
         private:
         std::vector<cl_uint> _neurons_per_layer;
@@ -65,8 +67,14 @@ namespace models {
         void zero_gradient_activations();
         void zero_gradient();
 
-        void add_matrix(std::vector<clwrapper::memory<VNN_FLOAT_TYPE>> &matrix_list, size_t n);
+        void init();
+        void add_matrix_pairs(
+            std::array<std::vector<clwrapper::memory<VNN_FLOAT_TYPE>>, 2> &out,
+            cl_uint n, bool shouldRandomize
+        );
+
         void read_from_device();
+        void write_to_device();
 
     };
 
