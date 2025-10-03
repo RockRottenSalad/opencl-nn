@@ -21,7 +21,7 @@ int main() {
 
     const std::string file = "xor.nn";
     if(!file_exists(file)) {
-        std::cout << "'xor.nn' not found, xor 'xor' target first to generate serialized model" << std::endl;
+        std::cout << "'xor.nn' not found, execute 'runxor' target first to generate serialized model" << std::endl;
         return 0;
     }
 
