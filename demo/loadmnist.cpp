@@ -4,6 +4,8 @@
 #include <cassert>
 
 #include "clwrapper.hpp"
+
+#define ENTRIES 10000
 #include "mnistdata.hpp"
 
 using namespace lazyml;
@@ -16,8 +18,8 @@ int main() {
 
     auto inputs_outputs  = get_mnist_data(
         con,
-        "data/train-images-idx3-ubyte",
-        "data/train-labels-idx1-ubyte"
+        "data/t10k-images-idx3-ubyte",
+        "data/t10k-labels-idx1-ubyte"
     );
 
     auto inputs = inputs_outputs.first;
@@ -26,22 +28,43 @@ int main() {
     std::cout << "inputs len: " << inputs.size() << std::endl;
     std::cout << "outputs len: " << outputs.size() << std::endl;
 
+    std::cout << "Image\n";
+    for(size_t i = 0; i < PIXELS_PER_IMAGE; i++) {
+        std::cout << inputs[0][i] << " ";
+    }
+    std::cout << std::endl;
+
     // 784 input neurons(28*28) for the image
     // two hidden layers with 16 neurons each
     // 10 outputs neurons, one for each possible digit[0-9]
     std::vector<cl_uint> arch = {784, 16, 16, 10};
 
-    models::vnn nn {con, arch};
+    models::vnn nn {con, "mnist2.nn"};
 
     float c0 = nn.cost(inputs, outputs);
     std::cout << "COST: " << c0 << std::endl;
 
-    nn.train(inputs, outputs, 100, 10.0);
+    for(size_t i = 0; i < inputs.size(); i++) {
+        auto result = nn.run(inputs[i]);
 
-    float c1 = nn.cost(inputs, outputs);
-    std::cout << "COST: " << c1 << std::endl;
+        std::cout << "Result: ";
+        for(size_t j = 0; j < 10; j++) {
+            std::cout << result[j] << " ";
+        }
+        std::cout << "\nExpected: ";
+        for(size_t j = 0; j < 10; j++) {
+            std::cout << outputs[i][j] << " ";
+        }
+        std::cout << std::endl;
 
-    if(c1 < c0) nn.serialize("mnist2.nn");
+    }
+
+//    nn.train(inputs, outputs, 3, 20.0);
+//
+//    float c1 = nn.cost(inputs, outputs);
+//    std::cout << "COST: " << c1 << std::endl;
+
+//    if(c1 < c0) nn.serialize("mnist.nn");
 
     return 0;
 }

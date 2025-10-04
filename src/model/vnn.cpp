@@ -176,6 +176,7 @@ void vnn::train(
         }
 
         this->apply_gradient( static_cast<cl_uint>(n), static_cast<cl_float>(learning_rate) );
+        std::cout << epoch << "/" << iterations << "\n";
     }
 
     _context._queue.finish();
@@ -210,7 +211,7 @@ VNN_FLOAT_TYPE vnn::cost(
         }
     }
 
-    return err / static_cast<VNN_FLOAT_TYPE>(n);
+    return err / static_cast<VNN_FLOAT_TYPE>(n) / static_cast<VNN_FLOAT_TYPE>(_neurons_per_layer[_layers-1]);
 }
 
 void vnn::forward(cl::Buffer &input) {
@@ -237,9 +238,10 @@ void vnn::forward(cl::Buffer &input) {
         cl_uint cols = static_cast<cl_uint>(_neurons_per_layer[i+1]);
         _forward_kernel.setArg(4, sizeof(cl_uint), &cols);
 
-        _forward_kernel.setArg(5, _activations_d[MAIN_CL_BUFFERS][i+1].get());
 
+        _forward_kernel.setArg(5, _activations_d[MAIN_CL_BUFFERS][i+1].get());
         _context._queue.enqueueNDRangeKernel(_forward_kernel, cl::NullRange, _kernel_range);
+
     }
 
 }
